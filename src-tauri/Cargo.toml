@@ -1,0 +1,46 @@
+[package]
+name = "devnest"
+version = "0.1.0"
+description = "DevNest – All-in-one Desktop Workspace for Developers"
+authors = ["DevNest"]
+edition = "2024"
+
+[lib]
+# The `_lib` suffix is required on Windows to avoid a name clash with the bin.
+name = "devnest_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util"] }
+russh = { version = "0.65", default-features = false, features = ["ring", "rsa", "flate2"] }
+rusqlite = { version = "0.40", features = ["bundled", "backup"] }
+rusqlite_migration = "2.6"
+uuid = { version = "1", features = ["v7", "serde"] }
+keyring = "4"
+chacha20poly1305 = "0.11"
+getrandom = "0.3"
+zeroize = { version = "1", features = ["derive"] }
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+tracing-appender = "0.2"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+
+[dev-dependencies]
+tempfile = "3"
+
+# https://tauri.app/concept/size/#cargo-configuration
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

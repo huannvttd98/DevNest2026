@@ -1,0 +1,130 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Design tokens. Components use the Tailwind utilities generated from these
+   (bg-surface, text-fg-muted, border-line, ...) so light/dark is one switch. */
+@theme {
+  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Mono", "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+
+  --color-app: var(--app);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-hover: var(--hover);
+  --color-line: var(--line);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-ok: var(--ok);
+}
+
+:root {
+  --app: #f4f5f7;
+  --surface: #ffffff;
+  --surface-2: #f8f9fb;
+  --hover: #eceef2;
+  --line: #e1e4ea;
+  --fg: #1d2129;
+  --fg-muted: #5b6270;
+  --fg-subtle: #8b92a0;
+  --accent: #2f6fed;
+  --accent-fg: #ffffff;
+  --accent-soft: #e6eefd;
+  --danger: #d43c3c;
+  --danger-soft: #fdecec;
+  --warn: #b7791f;
+  --warn-soft: #fdf5e6;
+  --ok: #2f9e5b;
+  --terminal-bg: #ffffff;
+  color-scheme: light;
+}
+
+.dark {
+  --app: #121417;
+  --surface: #191c20;
+  --surface-2: #1f2328;
+  --hover: #272c33;
+  --line: #2c3138;
+  --fg: #e4e7ec;
+  --fg-muted: #a0a7b4;
+  --fg-subtle: #6f7785;
+  --accent: #5b8dff;
+  --accent-fg: #0b1020;
+  --accent-soft: #1d2a45;
+  --danger: #f06363;
+  --danger-soft: #3a1f22;
+  --warn: #e0a83c;
+  --warn-soft: #3a3020;
+  --ok: #4cc27f;
+  --terminal-bg: #14171a;
+  color-scheme: dark;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--app);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  overflow: hidden;
+}
+
+input,
+textarea,
+.selectable {
+  user-select: text;
+}
+
+/* Thin scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md border border-line bg-surface px-3 h-8 text-[13px] font-medium text-fg transition-colors hover:bg-hover disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-primary {
+    @apply border-transparent bg-accent text-accent-fg hover:bg-accent hover:brightness-110;
+  }
+  .btn-danger {
+    @apply border-transparent bg-danger text-white hover:bg-danger hover:brightness-110;
+  }
+  .btn-ghost {
+    @apply border-transparent bg-transparent hover:bg-hover;
+  }
+  .icon-btn {
+    @apply inline-flex items-center justify-center rounded-md size-7 text-fg-muted hover:bg-hover hover:text-fg transition-colors disabled:opacity-40 disabled:pointer-events-none;
+  }
+  .field {
+    @apply w-full h-8 rounded-md border border-line bg-surface px-2.5 text-[13px] text-fg placeholder:text-fg-subtle outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft;
+  }
+  .field-error {
+    @apply border-danger focus:border-danger focus:ring-danger-soft;
+  }
+  .label {
+    @apply block mb-1 text-xs font-medium text-fg-muted;
+  }
+}
