@@ -1,0 +1,61 @@
+name: Release
+
+# Push a tag like v0.2.0 (see "npm run release:*") to build signed update bundles for
+# Windows and macOS and attach them, together with latest.json, to a GitHub Release.
+# The release is created as a DRAFT: installed apps only see the update once you
+# review the draft on GitHub and click "Publish release".
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            args: "--config src-tauri/tauri.release.conf.json"
+          - platform: macos-latest
+            args: "--config src-tauri/tauri.release.conf.json --target universal-apple-darwin"
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Update signing key (NOT a code-signing certificate). Created with
+          # `tauri signer generate`; the public key is in src-tauri/tauri.conf.json.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: v__VERSION__
+          releaseName: DevNest v__VERSION__
+          releaseBody: |
+            See the assets below to install DevNest manually.
+            Installed copies of DevNest (with auto-update) pick up this version automatically once it is published.
+          releaseDraft: true
+          prerelease: false
+          includeUpdaterJson: true
+          updaterJsonPreferNsis: true
+          args: ${{ matrix.args }}

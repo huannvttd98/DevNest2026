@@ -13,12 +13,17 @@
     "format": "prettier --write src",
     "test": "vitest run",
     "test:rust": "bash scripts/test-ssh.sh",
-    "check": "npm run typecheck && npm run lint && npm run test"
+    "check": "npm run typecheck && npm run lint && npm run test",
+    "release:patch": "npm version patch -m \"release: v%s\" && git push --follow-tags",
+    "release:minor": "npm version minor -m \"release: v%s\" && git push --follow-tags",
+    "release:major": "npm version major -m \"release: v%s\" && git push --follow-tags"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "^2.8.4",
     "@tauri-apps/plugin-opener": "^2",
+    "@tauri-apps/plugin-process": "^2.4.0",
+    "@tauri-apps/plugin-updater": "^2.14.1",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-search": "^0.16.0",
     "@xterm/addon-web-links": "^0.12.0",

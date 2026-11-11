@@ -4,20 +4,24 @@ import AppLayout from "@/layouts/AppLayout.vue";
 import ConnectionDialog from "@/components/connections/ConnectionDialog.vue";
 import DialogHost from "@/components/dialogs/DialogHost.vue";
 import Toasts from "@/components/common/Toasts.vue";
+import UpdateDialog from "@/components/common/UpdateDialog.vue";
 import { useUiStore } from "@/stores/ui";
 import { useConnectionsStore } from "@/stores/connections";
 import { useSessionsStore } from "@/stores/sessions";
 import { useAppStore } from "@/stores/app";
 import { useToastStore } from "@/stores/toasts";
+import { useUpdaterStore } from "@/stores/updater";
 
 const ui = useUiStore();
 const connections = useConnectionsStore();
 const sessions = useSessionsStore();
 const app = useAppStore();
 const toasts = useToastStore();
+const updater = useUpdaterStore();
 
 onMounted(async () => {
   void sessions.start();
+  updater.start();
   await connections.load();
   const info = await app.load();
   if (info?.vault_error) {
@@ -45,6 +49,7 @@ document.addEventListener("contextmenu", (e) => {
     :default-group-id="ui.editor.groupId"
     @close="ui.closeEditor()"
   />
+  <UpdateDialog />
   <DialogHost />
   <Toasts />
 </template>

@@ -60,6 +60,34 @@ npm run test:rust        # = bash scripts/test-ssh.sh
 > Turn it off in *Windows Security → App & browser control → Smart App Control* to develop locally,
 > or build in CI / Docker.
 
+## Releases & auto-update
+
+Installed copies check GitHub Releases (`latest.json`) 5 s after start and every 6 h, and via the
+↻ button in the status bar. Updates are downloaded, **verified with the update signing key** and
+installed; user data (`%APPDATA%\com.devnest.app`, keychain) is kept.
+
+Publish a new version (working tree must be clean):
+
+```bash
+npm run release:patch     # or release:minor / release:major
+```
+
+This bumps `package.json` (the single source of the app version), commits, tags `vX.Y.Z` and
+pushes. [release.yml](.github/workflows/release.yml) builds Windows + macOS, signs the update
+bundles and creates a **draft** GitHub Release. Review it and click **Publish release**; only then
+do installed apps see the update.
+
+One-time setup — GitHub → *Settings → Secrets and variables → Actions*:
+
+| Secret | Value |
+|---|---|
+| `TAURI_SIGNING_PRIVATE_KEY` | content of `~/.tauri/devnest-updater.key` |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | content of `~/.tauri/devnest-updater.password.txt` |
+
+The public key is in `src-tauri/tauri.conf.json` (`plugins.updater.pubkey`). **Back up the private
+key and password**: if they are lost, already-installed apps can never be updated again. The update
+key is not a code-signing certificate (SmartScreen still warns on first manual install).
+
 ## Project layout
 
 ```text
