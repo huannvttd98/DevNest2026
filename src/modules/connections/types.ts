@@ -20,6 +20,8 @@ export interface Connection {
   auth_type: AuthType;
   key_source: KeySource | null;
   key_path: string | null;
+  /** OpenSSH-style `-o` options, one `Key=Value` per line. */
+  ssh_options: string;
   has_password: boolean;
   has_passphrase: boolean;
   has_private_key: boolean;
@@ -44,6 +46,7 @@ export interface SaveConnectionInput {
   auth_type: AuthType;
   key_source: KeySource | null;
   key_path: string | null;
+  ssh_options: string;
   password: SecretUpdate;
   passphrase: SecretUpdate;
   private_key: SecretUpdate;

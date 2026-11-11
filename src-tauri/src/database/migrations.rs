@@ -1,7 +1,7 @@
 use rusqlite_migration::{M, Migrations};
 
 /// Bump together with adding a migration below.
-pub const LATEST_VERSION: usize = 1;
+pub const LATEST_VERSION: usize = 2;
 
 const V1: &str = r#"
 CREATE TABLE connection_groups (
@@ -54,6 +54,9 @@ CREATE TABLE settings (
 );
 "#;
 
+/// v2: per-connection OpenSSH-style algorithm options (e.g. `HostKeyAlgorithms=+ssh-rsa`).
+const V2: &str = "ALTER TABLE connections ADD COLUMN ssh_options TEXT NOT NULL DEFAULT '';";
+
 pub fn migrations() -> Migrations<'static> {
-    Migrations::new(vec![M::up(V1)])
+    Migrations::new(vec![M::up(V1), M::up(V2)])
 }

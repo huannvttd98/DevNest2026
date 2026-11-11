@@ -35,6 +35,7 @@ fn env() -> Option<Env> {
                 .and_then(|p| p.parse().ok())
                 .unwrap_or(2222),
             username: std::env::var("DEVNEST_TEST_SSH_USER").unwrap_or_else(|_| "dev".into()),
+            options: Default::default(),
         },
         password: std::env::var("DEVNEST_TEST_SSH_PASSWORD").unwrap_or_default(),
         key_path: std::env::var("DEVNEST_TEST_SSH_KEY").unwrap_or_default(),
@@ -306,4 +307,67 @@ async fn terminal_lifecycle_through_manager() {
     assert_eq!(statuses.first(), Some(&Status::Connecting));
     assert!(statuses.contains(&Status::Connected));
     assert_eq!(statuses.last(), Some(&Status::Disconnected));
+}
+
+#[tokio::test]
+async fn host_key_algorithm_options() {
+    let Some(env) = env() else { return };
+    let mut known = trusted(&env).await; // ed25519 by default
+
+    // Force an RSA host key (SHA-2 signature): a new key type -> TOFU prompt, not "changed".
+    let rsa = Target {
+        options: super::options::SshOptions::parse("HostKeyAlgorithms=rsa-sha2-512,rsa-sha2-256")
+            .unwrap(),
+        ..env.target.clone()
+    };
+    let err = client::connect(&rsa, &password(&env), known.clone(), None)
+        .await
+        .err()
+        .unwrap();
+    assert_eq!(err.code, ErrorCode::HostKeyUnknown, "{err:?}");
+    let d = err.details.unwrap();
+    assert_eq!(d["key_type"], "ssh-rsa");
+    known.push(KnownHost {
+        host: env.target.host.clone(),
+        port: env.target.port,
+        key_type: "ssh-rsa".into(),
+        fingerprint: d["fingerprint"].as_str().unwrap().into(),
+    });
+    let c = client::connect(&rsa, &password(&env), known.clone(), None)
+        .await
+        .expect("rsa host key");
+    let _ = c
+        .handle
+        .disconnect(russh::Disconnect::ByApplication, "", "en")
+        .await;
+
+    // Appending legacy algorithms keeps the modern defaults working.
+    let legacy = Target {
+        options: super::options::SshOptions::parse(
+            "HostKeyAlgorithms=+ssh-rsa
+PubkeyAcceptedKeyTypes=+ssh-rsa
+KexAlgorithms=+diffie-hellman-group14-sha1",
+        )
+        .unwrap(),
+        ..env.target.clone()
+    };
+    let c = client::connect(&legacy, &password(&env), known.clone(), None)
+        .await
+        .expect("append options");
+    let _ = c
+        .handle
+        .disconnect(russh::Disconnect::ByApplication, "", "en")
+        .await;
+
+    // A cipher the server does not offer -> friendly "no common algorithm" error.
+    let bad = Target {
+        options: super::options::SshOptions::parse("Ciphers=aes128-cbc").unwrap(),
+        ..env.target.clone()
+    };
+    let err = client::connect(&bad, &password(&env), known, None)
+        .await
+        .err()
+        .unwrap();
+    assert_eq!(err.code, ErrorCode::SshConnect, "{err:?}");
+    assert!(err.message.contains("Ciphers"), "{}", err.message);
 }

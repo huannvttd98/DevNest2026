@@ -2,7 +2,7 @@
 import { computed, reactive, ref } from "vue";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { homeDir, join } from "@tauri-apps/api/path";
-import { CircleAlert, CircleCheck, FolderOpen, LoaderCircle, PlugZap } from "lucide-vue-next";
+import { ChevronDown, ChevronRight, CircleAlert, CircleCheck, FolderOpen, LoaderCircle, PlugZap } from "lucide-vue-next";
 import Modal from "@/components/common/Modal.vue";
 import { useConnectionsStore } from "@/stores/connections";
 import { useToastStore } from "@/stores/toasts";
@@ -38,7 +38,9 @@ const form = reactive({
   keyMode: (c?.has_private_key ? "keep" : "paste") as "keep" | "paste" | "file",
   keyPaste: "",
   keyImportPath: "",
+  sshOptions: c?.ssh_options ?? "",
 });
+const showAdvanced = ref(!!c?.ssh_options);
 
 const errors = ref<FormErrors>({});
 const submitted = ref(false);
@@ -84,6 +86,7 @@ function buildInput(): SaveConnectionInput {
     auth_type: form.authType,
     key_source: isKey ? form.keySource : null,
     key_path: isKey && form.keySource === "path" ? form.keyPath.trim() : null,
+    ssh_options: form.sshOptions,
     password: isKey ? { action: "keep" } : secret(form.password, form.clearPassword),
     passphrase: isKey ? secret(form.passphrase, form.clearPassphrase) : { action: "keep" },
     private_key: privateKey,
@@ -283,6 +286,29 @@ function fieldClass(key: keyof FormErrors) {
           <label v-if="c?.has_passphrase" class="mt-1.5 flex items-center gap-2 text-xs text-fg-muted">
             <input v-model="form.clearPassphrase" type="checkbox" class="accent-[var(--accent)]" /> Remove saved passphrase
           </label>
+        </div>
+      </div>
+
+      <!-- Advanced: legacy algorithm options -->
+      <div>
+        <button type="button" class="flex items-center gap-1 text-xs font-medium text-fg-muted hover:text-fg" @click="showAdvanced = !showAdvanced">
+          <component :is="showAdvanced ? ChevronDown : ChevronRight" :size="14" /> Advanced
+          <span v-if="form.sshOptions.trim() && !showAdvanced" class="ml-1 rounded bg-accent-soft px-1 text-[10px] text-accent">SSH options</span>
+        </button>
+        <div v-if="showAdvanced" class="mt-2">
+          <label class="label" for="cn-opts">SSH options <span class="font-normal text-fg-subtle">(like <code>ssh -o</code>, one per line)</span></label>
+          <textarea
+            id="cn-opts"
+            v-model="form.sshOptions"
+            rows="3"
+            spellcheck="false"
+            class="field h-auto py-2 font-mono text-[11px] leading-snug"
+            placeholder="HostKeyAlgorithms=+ssh-rsa&#10;PubkeyAcceptedKeyTypes=+ssh-rsa"
+          />
+          <p class="mt-1 text-xs text-fg-subtle">
+            Supported: HostKeyAlgorithms, PubkeyAcceptedKeyTypes, KexAlgorithms, Ciphers, MACs. Use <code>+</code> to add legacy
+            algorithms for old servers.
+          </p>
         </div>
       </div>
 

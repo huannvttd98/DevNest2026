@@ -130,7 +130,7 @@ pub async fn terminal_open(
 ) -> AppResult<OpenTerminalResult> {
     let overrides = overrides.unwrap_or_default();
     let rec = repo::get(&*state.db.conn()?, &connection_id)?;
-    let target = service::target_of(&rec);
+    let target = service::target_of(&rec)?;
     let known = service::known_hosts_for(&state.db, &rec)?;
     let vault = state.vault()?;
 

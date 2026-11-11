@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{groups, new_id, now};
 use crate::error::{AppError, AppResult};
+use crate::ssh::options::{SshOptions, normalize as normalize_options};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -65,6 +66,8 @@ pub struct ConnectionRecord {
     pub auth_type: AuthType,
     pub key_source: Option<KeySource>,
     pub key_path: Option<String>,
+    /// OpenSSH-style `-o` algorithm options, one `Key=Value` per line.
+    pub ssh_options: String,
     pub has_password: bool,
     pub has_passphrase: bool,
     pub has_private_key: bool,
@@ -85,6 +88,8 @@ pub struct ConnectionFields {
     pub auth_type: AuthType,
     pub key_source: Option<KeySource>,
     pub key_path: Option<String>,
+    #[serde(default)]
+    pub ssh_options: Option<String>,
 }
 
 /// Validated, normalized fields.
@@ -98,6 +103,7 @@ pub struct ValidFields {
     pub auth_type: AuthType,
     pub key_source: Option<KeySource>,
     pub key_path: Option<String>,
+    pub ssh_options: String,
 }
 
 pub fn validate(conn: &Connection, f: &ConnectionFields) -> AppResult<ValidFields> {
@@ -152,6 +158,8 @@ pub fn validate(conn: &Connection, f: &ConnectionFields) -> AppResult<ValidField
             }
         }
     };
+    let ssh_options = normalize_options(f.ssh_options.as_deref().unwrap_or_default());
+    SshOptions::parse(&ssh_options)?;
     Ok(ValidFields {
         group_id,
         name: name.to_string(),
@@ -161,6 +169,7 @@ pub fn validate(conn: &Connection, f: &ConnectionFields) -> AppResult<ValidField
         auth_type: f.auth_type,
         key_source,
         key_path,
+        ssh_options,
     })
 }
 
@@ -187,7 +196,7 @@ fn validate_host(host: &str) -> AppResult<()> {
 
 const SELECT: &str = "
 SELECT c.id, c.group_id, c.name, c.host, c.port, c.username, c.auth_type, c.key_source,
-       c.key_path, c.sort_order, c.created_at, c.updated_at, c.last_connected_at,
+       c.key_path, c.sort_order, c.created_at, c.updated_at, c.last_connected_at, c.ssh_options,
        EXISTS(SELECT 1 FROM secrets s WHERE s.owner_id = c.id AND s.kind = 'password'),
        EXISTS(SELECT 1 FROM secrets s WHERE s.owner_id = c.id AND s.kind = 'passphrase'),
        EXISTS(SELECT 1 FROM secrets s WHERE s.owner_id = c.id AND s.kind = 'private_key')
@@ -211,9 +220,10 @@ fn map_row(r: &Row<'_>) -> rusqlite::Result<ConnectionRecord> {
         created_at: r.get(10)?,
         updated_at: r.get(11)?,
         last_connected_at: r.get(12)?,
-        has_password: r.get(13)?,
-        has_passphrase: r.get(14)?,
-        has_private_key: r.get(15)?,
+        ssh_options: r.get(13)?,
+        has_password: r.get(14)?,
+        has_passphrase: r.get(15)?,
+        has_private_key: r.get(16)?,
     })
 }
 
@@ -242,8 +252,8 @@ pub fn insert(conn: &Connection, f: &ValidFields) -> AppResult<String> {
     conn.execute(
         "INSERT INTO connections
             (id, group_id, name, host, port, username, auth_type, key_source, key_path,
-             sort_order, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11)",
+             sort_order, created_at, updated_at, ssh_options)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11, ?12)",
         params![
             id,
             f.group_id,
@@ -255,7 +265,8 @@ pub fn insert(conn: &Connection, f: &ValidFields) -> AppResult<String> {
             f.key_source.map(KeySource::as_str),
             f.key_path,
             next_order,
-            ts
+            ts,
+            f.ssh_options
         ],
     )?;
     Ok(id)
@@ -264,7 +275,7 @@ pub fn insert(conn: &Connection, f: &ValidFields) -> AppResult<String> {
 pub fn update(conn: &Connection, id: &str, f: &ValidFields) -> AppResult<()> {
     let n = conn.execute(
         "UPDATE connections SET group_id = ?2, name = ?3, host = ?4, port = ?5, username = ?6,
-             auth_type = ?7, key_source = ?8, key_path = ?9, updated_at = ?10
+             auth_type = ?7, key_source = ?8, key_path = ?9, updated_at = ?10, ssh_options = ?11
          WHERE id = ?1",
         params![
             id,
@@ -276,7 +287,8 @@ pub fn update(conn: &Connection, id: &str, f: &ValidFields) -> AppResult<()> {
             f.auth_type.as_str(),
             f.key_source.map(KeySource::as_str),
             f.key_path,
-            now()
+            now(),
+            f.ssh_options
         ],
     )?;
     if n == 0 {
@@ -333,6 +345,7 @@ mod tests {
             auth_type: AuthType::Key,
             key_source: Some(KeySource::Path),
             key_path: Some("C:/keys/id_ed25519".into()),
+            ssh_options: None,
         }
     }
 

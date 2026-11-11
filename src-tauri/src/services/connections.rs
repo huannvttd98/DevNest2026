@@ -11,6 +11,7 @@ use crate::database::{Db, known_hosts};
 use crate::error::{AppError, AppResult, ErrorCode};
 use crate::secret::Secret;
 use crate::ssh::client::{self, Credentials, KeyMaterial, Target};
+use crate::ssh::options::SshOptions;
 use crate::vault::Vault;
 
 /// What to do with a stored secret when saving the form.
@@ -162,12 +163,13 @@ fn stored_secret(db: &Db, vault: &Vault, id: &str, kind: SecretKind) -> AppResul
     Ok(dec)
 }
 
-pub fn target_of(rec: &ConnectionRecord) -> Target {
-    Target {
+pub fn target_of(rec: &ConnectionRecord) -> AppResult<Target> {
+    Ok(Target {
         host: rec.host.clone(),
         port: rec.port,
         username: rec.username.clone(),
-    }
+        options: SshOptions::parse(&rec.ssh_options)?,
+    })
 }
 
 pub fn known_hosts_for(db: &Db, rec: &ConnectionRecord) -> AppResult<Vec<known_hosts::KnownHost>> {
@@ -227,6 +229,7 @@ pub fn test_params(
         host: fields.host.clone(),
         port: fields.port,
         username: fields.username.clone(),
+        options: SshOptions::parse(&fields.ssh_options)?,
     };
     let pick = |update: &SecretUpdate,
                 kind: SecretKind,
@@ -317,6 +320,7 @@ mod tests {
                 auth_type: auth,
                 key_source: (auth == AuthType::Key).then_some(KeySource::Path),
                 key_path: (auth == AuthType::Key).then(|| "/tmp/id".into()),
+                ssh_options: None,
             },
             password: SecretUpdate::Keep,
             passphrase: SecretUpdate::Keep,

@@ -1,5 +1,6 @@
 pub mod client;
 pub mod manager;
+pub mod options;
 pub mod terminal;
 
 #[cfg(test)]

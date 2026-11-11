@@ -14,6 +14,7 @@ use zeroize::Zeroizing;
 use crate::database::known_hosts::KnownHost;
 use crate::error::{AppError, AppResult, ErrorCode};
 use crate::secret::Secret;
+use crate::ssh::options::SshOptions;
 
 pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(30);
@@ -26,6 +27,8 @@ pub struct Target {
     pub host: String,
     pub port: u16,
     pub username: String,
+    /// Algorithm overrides (`HostKeyAlgorithms=+ssh-rsa`, ...).
+    pub options: SshOptions,
 }
 
 #[derive(Debug, Clone)]
@@ -106,13 +109,15 @@ impl client::Handler for ClientHandler {
             }
             return Ok(true);
         }
-        if let Some(prev) = self.known.first() {
-            // A different key is stored for this host – treat as changed (possible MITM).
+        if let Some(prev) = self.known.iter().find(|k| k.key_type == key_type) {
+            // Same key type, different fingerprint – possible MITM.
             return Err(HandlerError::HostKeyChanged(HostKeyInfo {
                 previous_fingerprint: Some(format!("{} ({})", prev.fingerprint, prev.key_type)),
                 ..info
             }));
         }
+        // No key of this type is known yet (first connection, or the algorithm options now
+        // select another host key type) – ask the user like OpenSSH does.
         Err(HandlerError::HostKeyUnknown(info))
     }
 
@@ -274,6 +279,26 @@ pub fn map_russh_error(e: russh::Error, target: &Target) -> AppError {
             ErrorCode::SshAuthFailed,
             "No supported authentication method accepted",
         ),
+        E::NoCommonAlgo { kind, theirs, .. } => {
+            let (option, hint) = match kind {
+                russh::AlgorithmKind::Key => ("HostKeyAlgorithms", theirs.first().cloned()),
+                russh::AlgorithmKind::Kex => ("KexAlgorithms", theirs.first().cloned()),
+                russh::AlgorithmKind::Cipher => ("Ciphers", theirs.first().cloned()),
+                russh::AlgorithmKind::Mac => ("MACs", theirs.first().cloned()),
+                russh::AlgorithmKind::Compression => ("Compression", None),
+            };
+            let suggestion = hint
+                .map(|h| format!(" Try adding the SSH option `{option}=+{h}` (Edit → Advanced)."))
+                .unwrap_or_default();
+            AppError::new(
+                ErrorCode::SshConnect,
+                format!(
+                    "The server only offers legacy {kind:?} algorithms: {}.{suggestion}",
+                    theirs.join(", ")
+                ),
+            )
+            .with_details(json!({ "option": option, "server_offers": theirs }))
+        }
         other => AppError::new(ErrorCode::SshConnect, format!("SSH error: {other}")),
     }
 }
@@ -302,6 +327,7 @@ pub async fn connect(
         keepalive_interval: Some(KEEPALIVE_INTERVAL),
         keepalive_max: KEEPALIVE_MAX,
         nodelay: true,
+        preferred: target.options.preferred(),
         ..Default::default()
     });
     let accepted = Arc::new(std::sync::Mutex::new(None));
