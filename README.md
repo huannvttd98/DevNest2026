@@ -16,6 +16,8 @@ Built with Tauri 2 · Vue 3 · TypeScript · Rust · Tailwind CSS · xterm.js ·
 - **Prompts on demand** — missing password / passphrase is asked at connect time, optionally saved.
 - **SSH Terminal** — xterm.js, multiple tabs (rename, close, Ctrl+Tab), resize sync, search,
   copy/paste, clickable links (Ctrl+click), disconnect detection and reconnect that keeps scrollback.
+- **SSH file download** — open a separate SFTP window from the active terminal, browse remote files and local
+  folders, then drag a remote file to a local folder; replacing an existing file requires confirmation.
 - **Info panel** (toggle) — host, port, user, auth, status, host-key fingerprint.
 - Dark / light / system theme, loading / empty / error states.
 

@@ -53,6 +53,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::app::app_info,
+            commands::app::local_list_dir,
             commands::connections::groups_list,
             commands::connections::group_create,
             commands::connections::group_rename,
@@ -70,6 +71,8 @@ pub fn run() {
             commands::ssh::terminal_write,
             commands::ssh::terminal_resize,
             commands::ssh::terminal_close,
+            commands::ssh::ssh_list_dir,
+            commands::ssh::ssh_download,
         ])
         .build(tauri::generate_context!())
         .expect("error while building DevNest");

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted } from "vue";
 import AppLayout from "@/layouts/AppLayout.vue";
+import SftpTransferWindow from "@/components/files/SftpTransferWindow.vue";
 import ConnectionDialog from "@/components/connections/ConnectionDialog.vue";
 import DialogHost from "@/components/dialogs/DialogHost.vue";
 import Toasts from "@/components/common/Toasts.vue";
@@ -18,8 +19,12 @@ const sessions = useSessionsStore();
 const app = useAppStore();
 const toasts = useToastStore();
 const updater = useUpdaterStore();
+const query = new URLSearchParams(window.location.search);
+const isSftpWindow = query.get("window") === "sftp";
+const sftpConnectionId = query.get("connectionId");
 
 onMounted(async () => {
+  if (isSftpWindow) return;
   void sessions.start();
   updater.start();
   await connections.load();
@@ -42,14 +47,17 @@ document.addEventListener("contextmenu", (e) => {
 </script>
 
 <template>
-  <AppLayout />
-  <ConnectionDialog
-    v-if="ui.editor"
-    :connection="ui.editor.connection"
-    :default-group-id="ui.editor.groupId"
-    @close="ui.closeEditor()"
-  />
-  <UpdateDialog />
-  <DialogHost />
-  <Toasts />
+  <SftpTransferWindow v-if="isSftpWindow" :connection-id="sftpConnectionId ?? ''" />
+  <template v-else>
+    <AppLayout />
+    <ConnectionDialog
+      v-if="ui.editor"
+      :connection="ui.editor.connection"
+      :default-group-id="ui.editor.groupId"
+      @close="ui.closeEditor()"
+    />
+    <UpdateDialog />
+    <DialogHost />
+    <Toasts />
+  </template>
 </template>

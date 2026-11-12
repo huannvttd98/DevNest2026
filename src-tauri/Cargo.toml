@@ -19,8 +19,9 @@ tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util", "fs"] }
 russh = { version = "0.65", default-features = false, features = ["ring", "rsa", "flate2"] }
+russh-sftp = "3.0.1"
 rusqlite = { version = "0.40", features = ["bundled", "backup"] }
 rusqlite_migration = "2.6"
 uuid = { version = "1", features = ["v7", "serde"] }
@@ -33,14 +34,12 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 tracing-appender = "0.2"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+tempfile = "3"
 
 # Desktop-only plugins (auto-update + relaunch after update).
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
-
-[dev-dependencies]
-tempfile = "3"
 
 # https://tauri.app/concept/size/#cargo-configuration
 [profile.release]

@@ -264,6 +264,8 @@ Nguyên tắc:
 
 ### Phase 3 – File Management (~2.5–3 tuần)
 
+> Đã có cửa sổ SFTP riêng để duyệt file server và kéo file về thư mục local; upload và các thao tác quản lý vẫn nằm trong phase này.
+
 **Local File Explorer**
 - [ ] Cây lazy-load, mở rộng/thu gọn
 - [ ] Tạo, đổi tên, xoá file/folder (có xác nhận)

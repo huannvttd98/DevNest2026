@@ -11,7 +11,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 
 use russh::client::Handle;
+use russh_sftp::client::SftpSession;
 use serde::Serialize;
+use tokio::io::{AsyncWriteExt, copy};
 
 use super::client::{self, ClientHandler, Credentials, HostKeyInfo, Target};
 use super::terminal::{Terminal, TerminalSink};
@@ -43,6 +45,20 @@ pub struct SessionInfo {
     pub connected_at: String,
     pub host_key: Option<HostKeyInfo>,
     pub terminals: usize,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RemoteDirectory {
+    pub path: String,
+    pub entries: Vec<RemoteFileEntry>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RemoteFileEntry {
+    pub name: String,
+    pub path: String,
+    pub is_dir: bool,
+    pub size: Option<u64>,
 }
 
 struct LiveConnection {
@@ -263,6 +279,190 @@ impl SshManager {
 
     pub async fn resize(&self, terminal_id: &str, cols: u32, rows: u32) -> AppResult<()> {
         self.terminal(terminal_id)?.resize(cols, rows).await
+    }
+
+    pub async fn list_remote_dir(
+        &self,
+        connection_id: &str,
+        remote_path: &str,
+    ) -> AppResult<RemoteDirectory> {
+        let live = self.live(connection_id)?.ok_or_else(|| {
+            AppError::new(ErrorCode::SshDisconnected, "SSH session is not connected")
+        })?;
+        let channel = live.handle.channel_open_session().await.map_err(|e| {
+            AppError::new(
+                ErrorCode::SshChannel,
+                format!("Cannot open SFTP channel: {e}"),
+            )
+        })?;
+        channel.request_subsystem(true, "sftp").await.map_err(|e| {
+            AppError::new(
+                ErrorCode::SshChannel,
+                format!("Cannot start SFTP subsystem: {e}"),
+            )
+        })?;
+        let sftp = SftpSession::new(channel.into_stream()).await.map_err(|e| {
+            AppError::new(
+                ErrorCode::SshChannel,
+                format!("Cannot initialize SFTP: {e}"),
+            )
+        })?;
+        let path = if remote_path.trim().is_empty() {
+            "."
+        } else {
+            remote_path
+        };
+        let path = sftp.canonicalize(path).await.map_err(|e| {
+            AppError::new(
+                ErrorCode::SshChannel,
+                format!("Cannot open remote folder: {e}"),
+            )
+        })?;
+        let mut entries = sftp
+            .read_dir(&path)
+            .await
+            .map_err(|e| {
+                AppError::new(
+                    ErrorCode::SshChannel,
+                    format!("Cannot list remote folder: {e}"),
+                )
+            })?
+            .map(|entry| {
+                let metadata = entry.metadata();
+                RemoteFileEntry {
+                    name: entry.file_name(),
+                    path: entry.path(),
+                    is_dir: metadata.is_dir(),
+                    size: metadata.size,
+                }
+            })
+            .collect::<Vec<_>>();
+        entries.sort_by(|a, b| {
+            b.is_dir
+                .cmp(&a.is_dir)
+                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+        });
+        sftp.close().await.map_err(|e| {
+            AppError::new(
+                ErrorCode::SshChannel,
+                format!("Cannot close SFTP session: {e}"),
+            )
+        })?;
+        Ok(RemoteDirectory { path, entries })
+    }
+
+    /// Download a remote file over SFTP using an already-live SSH connection.
+    pub async fn download_file(
+        &self,
+        connection_id: &str,
+        remote_path: &str,
+        local_directory: &std::path::Path,
+        file_name: &str,
+        overwrite: bool,
+    ) -> AppResult<String> {
+        if remote_path.trim().is_empty() {
+            return Err(AppError::validation("Remote file path is required"));
+        }
+        if file_name.is_empty()
+            || file_name == "."
+            || file_name == ".."
+            || file_name.chars().any(|c| matches!(c, '/' | '\\' | '\0'))
+        {
+            return Err(AppError::validation("Invalid local file name"));
+        }
+        let local_directory = tokio::fs::canonicalize(local_directory).await?;
+        if !tokio::fs::metadata(&local_directory).await?.is_dir() {
+            return Err(AppError::validation(
+                "The selected local destination is not a folder",
+            ));
+        }
+        let local_path = local_directory.join(file_name);
+        if !overwrite && tokio::fs::try_exists(&local_path).await? {
+            return Err(AppError::new(
+                ErrorCode::FileExists,
+                "The selected local file already exists",
+            ));
+        }
+
+        let temporary = tempfile::NamedTempFile::new_in(&local_directory).map_err(|e| {
+            AppError::internal(format!("Cannot create a temporary download file: {e}"))
+        })?;
+
+        let live = self.live(connection_id)?.ok_or_else(|| {
+            AppError::new(ErrorCode::SshDisconnected, "SSH session is not connected")
+        })?;
+        let channel = live.handle.channel_open_session().await.map_err(|e| {
+            AppError::new(
+                ErrorCode::SshChannel,
+                format!("Cannot open SFTP channel: {e}"),
+            )
+        })?;
+        channel.request_subsystem(true, "sftp").await.map_err(|e| {
+            AppError::new(
+                ErrorCode::SshChannel,
+                format!("Cannot start SFTP subsystem: {e}"),
+            )
+        })?;
+        let sftp = SftpSession::new(channel.into_stream()).await.map_err(|e| {
+            AppError::new(
+                ErrorCode::SshChannel,
+                format!("Cannot initialize SFTP: {e}"),
+            )
+        })?;
+        let mut remote = sftp.open(remote_path).await.map_err(|e| {
+            AppError::new(
+                ErrorCode::SshChannel,
+                format!("Cannot open remote file: {e}"),
+            )
+        })?;
+
+        let std_file = temporary
+            .reopen()
+            .map_err(|e| AppError::internal(format!("Cannot write the downloaded file: {e}")))?;
+        let mut local = tokio::fs::File::from_std(std_file);
+        copy(&mut remote, &mut local).await.map_err(|e| {
+            AppError::new(ErrorCode::SshChannel, format!("File download failed: {e}"))
+        })?;
+        local
+            .flush()
+            .await
+            .map_err(|e| AppError::internal(format!("Cannot flush the downloaded file: {e}")))?;
+        local
+            .sync_all()
+            .await
+            .map_err(|e| AppError::internal(format!("Cannot save the downloaded file: {e}")))?;
+        drop(local);
+
+        remote.close().await.map_err(|e| {
+            AppError::new(
+                ErrorCode::SshChannel,
+                format!("Cannot close remote file: {e}"),
+            )
+        })?;
+        sftp.close().await.map_err(|e| {
+            AppError::new(
+                ErrorCode::SshChannel,
+                format!("Cannot close SFTP session: {e}"),
+            )
+        })?;
+
+        let persisted = if overwrite {
+            temporary.persist(&local_path)
+        } else {
+            temporary.persist_noclobber(&local_path)
+        };
+        persisted.map_err(|e| {
+            if e.error.kind() == std::io::ErrorKind::AlreadyExists {
+                AppError::new(
+                    ErrorCode::FileExists,
+                    "The selected local file already exists",
+                )
+            } else {
+                AppError::internal(format!("Cannot save the downloaded file: {}", e.error))
+            }
+        })?;
+        tracing::info!(connection_id, "SFTP file downloaded");
+        Ok(local_path.display().to_string())
     }
 
     pub async fn close_terminal(&self, terminal_id: &str) -> AppResult<()> {

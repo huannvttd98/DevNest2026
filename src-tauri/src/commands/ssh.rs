@@ -203,3 +203,40 @@ pub async fn terminal_resize(
 pub async fn terminal_close(state: State<'_, AppState>, terminal_id: String) -> AppResult<()> {
     state.ssh.close_terminal(&terminal_id).await
 }
+
+#[tauri::command]
+pub async fn ssh_list_dir(
+    window: tauri::WebviewWindow,
+    state: State<'_, AppState>,
+    connection_id: String,
+    remote_path: String,
+) -> AppResult<crate::ssh::manager::RemoteDirectory> {
+    super::require_sftp_window(&window)?;
+    state
+        .ssh
+        .list_remote_dir(&connection_id, &remote_path)
+        .await
+}
+
+#[tauri::command]
+pub async fn ssh_download(
+    window: tauri::WebviewWindow,
+    state: State<'_, AppState>,
+    connection_id: String,
+    remote_path: String,
+    local_directory: String,
+    file_name: String,
+    overwrite: bool,
+) -> AppResult<String> {
+    super::require_sftp_window(&window)?;
+    state
+        .ssh
+        .download_file(
+            &connection_id,
+            &remote_path,
+            std::path::Path::new(&local_directory),
+            &file_name,
+            overwrite,
+        )
+        .await
+}

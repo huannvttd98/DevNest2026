@@ -18,6 +18,18 @@ export interface SessionInfo {
   terminals: number;
 }
 
+export interface RemoteFileEntry {
+  name: string;
+  path: string;
+  is_dir: boolean;
+  size: number | null;
+}
+
+export interface RemoteDirectory {
+  path: string;
+  entries: RemoteFileEntry[];
+}
+
 export type TerminalEvent =
   | { type: "exit"; code: number | null; signal: string | null }
   | { type: "closed"; reason: string | null };
@@ -63,6 +75,10 @@ export const sshApi = {
   resize: (terminalId: string, cols: number, rows: number) =>
     call<void>("terminal_resize", { terminalId, cols, rows }),
   close: (terminalId: string) => call<void>("terminal_close", { terminalId }),
+  listRemoteDir: (connectionId: string, remotePath: string) =>
+    call<RemoteDirectory>("ssh_list_dir", { connectionId, remotePath }),
+  download: (connectionId: string, remotePath: string, localDirectory: string, fileName: string, overwrite = false) =>
+    call<string>("ssh_download", { connectionId, remotePath, localDirectory, fileName, overwrite }),
 
   onStatus: (cb: (e: StatusEvent) => void): Promise<UnlistenFn> =>
     listen<StatusEvent>("ssh://status", (e) => cb(e.payload)),

@@ -5,11 +5,13 @@ import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { SearchAddon } from "@xterm/addon-search";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { ChevronDown, ChevronUp, LoaderCircle, RotateCw, Search, Unplug, X } from "lucide-vue-next";
+import { ChevronDown, ChevronUp, Files, LoaderCircle, RotateCw, Search, Unplug, X } from "lucide-vue-next";
 import { createTerminalChannel, sshApi } from "@/modules/ssh/api";
+import { openSftpFileBrowser } from "@/modules/ssh/file-browser";
 import { CancelledError, runWithPrompts } from "@/modules/ssh/prompts";
 import { useConnectionsStore } from "@/stores/connections";
 import { useTabsStore, type TerminalTab } from "@/stores/tabs";
+import { useToastStore } from "@/stores/toasts";
 import { useUiStore } from "@/stores/ui";
 import { toAppError } from "@/lib/ipc";
 
@@ -18,11 +20,13 @@ const props = defineProps<{ tab: TerminalTab; active: boolean }>();
 const tabs = useTabsStore();
 const ui = useUiStore();
 const connections = useConnectionsStore();
+const toasts = useToastStore();
 
 const host = ref<HTMLDivElement | null>(null);
 const searchOpen = ref(false);
 const searchText = ref("");
 const searchInput = ref<HTMLInputElement | null>(null);
+const openingFileBrowser = ref(false);
 
 let term: Terminal | null = null;
 let fit: FitAddon | null = null;
@@ -229,6 +233,19 @@ function closeSearch() {
   term?.focus();
 }
 
+async function openFileBrowser() {
+  const conn = connections.byId.get(props.tab.connectionId);
+  if (!conn || props.tab.state !== "connected" || openingFileBrowser.value) return;
+  openingFileBrowser.value = true;
+  try {
+    await openSftpFileBrowser(conn);
+  } catch (error) {
+    toasts.error("Cannot open server files", toAppError(error).message);
+  } finally {
+    openingFileBrowser.value = false;
+  }
+}
+
 onMounted(() => {
   term = new Terminal({
     fontFamily: getComputedStyle(document.documentElement).getPropertyValue("--font-mono") || "monospace",
@@ -299,7 +316,7 @@ defineExpose({ reconnect: connect, focus: () => term?.focus() });
     <!-- search -->
     <div
       v-if="searchOpen"
-      class="absolute top-2 right-4 z-10 flex items-center gap-1 rounded-md border border-line bg-surface p-1 shadow-lg"
+      class="absolute top-10 right-4 z-10 flex items-center gap-1 rounded-md border border-line bg-surface p-1 shadow-lg"
     >
       <Search :size="13" class="ml-1 text-fg-subtle" />
       <input
@@ -315,6 +332,21 @@ defineExpose({ reconnect: connect, focus: () => term?.focus() });
       <button class="icon-btn size-6" aria-label="Previous match" @click="findNext(true)"><ChevronUp :size="14" /></button>
       <button class="icon-btn size-6" aria-label="Next match" @click="findNext()"><ChevronDown :size="14" /></button>
       <button class="icon-btn size-6" aria-label="Close search" @click="closeSearch"><X :size="14" /></button>
+    </div>
+
+    <div class="flex h-8 shrink-0 items-center justify-end border-b border-line/60 px-2">
+      <button
+        class="btn h-6 text-xs"
+        :disabled="tab.state !== 'connected' || openingFileBrowser"
+        :title="
+          tab.state === 'connected' ? 'Browse and download files from this server' : 'Connect to browse server files'
+        "
+        @click="openFileBrowser"
+      >
+        <LoaderCircle v-if="openingFileBrowser" :size="13" class="animate-spin" />
+        <Files v-else :size="13" />
+        {{ openingFileBrowser ? "Opening…" : "Server files" }}
+      </button>
     </div>
 
     <div class="relative min-h-0 flex-1 px-2 pt-1.5">

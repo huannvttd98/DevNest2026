@@ -371,3 +371,60 @@ KexAlgorithms=+diffie-hellman-group14-sha1",
     assert_eq!(err.code, ErrorCode::SshConnect, "{err:?}");
     assert!(err.message.contains("Ciphers"), "{}", err.message);
 }
+
+#[tokio::test]
+async fn sftp_browsing_download_and_overwrite() {
+    let Some(env) = env() else { return };
+    let known = trusted(&env).await;
+    let manager = SshManager::new(Arc::new(|_| {}));
+    let connection_id = "sftp-integration";
+    manager
+        .ensure_connected(connection_id, &env.target, known, || Ok(password(&env)))
+        .await
+        .expect("SSH connection");
+
+    let remote = manager
+        .list_remote_dir(connection_id, "/etc")
+        .await
+        .expect("SFTP directory listing");
+    assert!(remote.entries.iter().any(|entry| entry.name == "hostname"));
+
+    let local = tempfile::tempdir().unwrap();
+    let downloaded = manager
+        .download_file(
+            connection_id,
+            "/etc/hostname",
+            local.path(),
+            "hostname",
+            false,
+        )
+        .await
+        .expect("SFTP download");
+    let content = std::fs::read(&downloaded).unwrap();
+    assert!(!content.is_empty());
+
+    let error = manager
+        .download_file(
+            connection_id,
+            "/etc/hostname",
+            local.path(),
+            "hostname",
+            false,
+        )
+        .await
+        .expect_err("existing files must not be overwritten without confirmation");
+    assert_eq!(error.code, ErrorCode::FileExists);
+
+    manager
+        .download_file(
+            connection_id,
+            "/etc/hostname",
+            local.path(),
+            "hostname",
+            true,
+        )
+        .await
+        .expect("confirmed overwrite");
+    assert_eq!(std::fs::read(&downloaded).unwrap(), content);
+    manager.disconnect(connection_id).await.unwrap();
+}

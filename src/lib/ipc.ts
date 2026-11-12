@@ -6,6 +6,7 @@ export type ErrorCode =
   | "DATABASE"
   | "VAULT"
   | "NOT_FOUND"
+  | "FILE_EXISTS"
   | "VALIDATION"
   | "SSH_CONNECT"
   | "SSH_TIMEOUT"

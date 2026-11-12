@@ -17,6 +17,7 @@ pub enum ErrorCode {
     Vault,
     NotFound,
     Validation,
+    FileExists,
     /// Host unreachable / DNS / TCP failure.
     SshConnect,
     SshTimeout,

@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "sftp-window",
+  "description": "Permissions for the SSH file transfer window",
+  "windows": ["sftp-*"],
+  "permissions": ["core:default", "dialog:allow-open"]
+}
